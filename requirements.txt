@@ -1,0 +1,4 @@
+resemble
+gradio
+python-dotenv
+websocket-client
