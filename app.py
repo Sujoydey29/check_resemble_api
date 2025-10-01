@@ -10,6 +10,13 @@ import mimetypes
 import websocket # New import
 import json # New import
 
+# Optional translation support
+try:
+    from googletrans import Translator
+    _translator: Translator | None = Translator()
+except Exception:
+    _translator = None
+
 # --- Step 1: Setup API Key ---
 load_dotenv()
 RESEMBLE_API_KEY = os.getenv("RESEMBLE_API_KEY")
@@ -32,7 +39,7 @@ STS_MODELS = [
     ("Resemble Core STS V2", "sts-v2"),
 ]
 
-# --- Helpers ---
+# --- Helpers --- 
 
 def trim_audio(input_path, output_path, max_ms=1000):
     audio = AudioSegment.from_file(input_path)
@@ -61,6 +68,30 @@ def download_audio_from_url(url, output_path="output_audio.wav"):
     except Exception as e:
         print(f"Error downloading audio: {e}")
         return None
+
+def _extract_primary_lang(bcp47_code: str) -> str:
+    """Return primary language subtag for translation (e.g., 'mr-IN' -> 'mr')."""
+    return (bcp47_code or "").split("-")[0].lower()
+
+def maybe_translate_text(input_text: str, target_bcp47_code: str) -> tuple[str, str]:
+    """
+    Translate input_text to target language if translator is available and the
+    language is supported. Returns (text_to_use, note).
+    """
+    if not input_text:
+        return input_text, ""
+    if _translator is None:
+        return input_text, ""
+    try:
+        target_primary = _extract_primary_lang(target_bcp47_code)
+        # Perform translation only if target is not English and text appears English.
+        if target_primary and target_primary != "en":
+            translated = _translator.translate(input_text, dest=target_primary)
+            return translated.text, f" (translated to {target_primary})"
+        return input_text, ""
+    except Exception:
+        # If translation fails, fall back silently
+        return input_text, ""
 
 # --- ENHANCEMENT FUNCTION ---
 
@@ -155,13 +186,19 @@ def get_voice_uuid(selected_voice_name, all_voices_data):
     print(f"Selected voice '{selected_voice_name}' with UUID: {voice_uuid}")
     return voice_uuid
 
-def generate_tts_clip(text, voice_uuid, project_uuid, language_code="en-US"):
+def generate_tts_clip(text, voice_uuid, project_uuid, language_code="en-US", auto_translate=True):
     if not all([text, voice_uuid, project_uuid]):
         return None, "Missing text, voice UUID, or project UUID."
     print(f"Generating TTS for voice: {voice_uuid} in language: {language_code}")
+    start_time = time.time()
     try:
+        # Optionally translate user input text into selected language
+        text_to_use = text
+        translate_note = ""
+        if auto_translate:
+            text_to_use, translate_note = maybe_translate_text(text, language_code)
         # Wrap the text in an SSML <lang> tag
-        ssml_body = f'<speak><lang xml:lang="{language_code}">{text}</lang></speak>'
+        ssml_body = f'<speak><lang xml:lang="{language_code}">{text_to_use}</lang></speak>'
         response = Resemble.v2.clips.create_sync(
             project_uuid=project_uuid,
             voice_uuid=voice_uuid,
@@ -174,21 +211,23 @@ def generate_tts_clip(text, voice_uuid, project_uuid, language_code="en-US"):
         clip_src = response['item']['audio_src']
         output_filename = "tts_output.wav"
         downloaded_path = download_audio_from_url(clip_src, output_filename)
+        end_time = time.time()
+        rtt = round((end_time - start_time) * 1000, 2)
         if downloaded_path:
             print("TTS clip generated and saved successfully.")
-            return downloaded_path, "TTS clip generated successfully."
+            return downloaded_path, f"TTS clip generated successfully. RTT: {rtt} ms{translate_note}"
         else:
             return None, "Failed to download TTS clip."
     except Exception as e:
         error_message = f"Error generating TTS clip: {e}"
-        print(error_message)
-        return None, error_message
+        return None, f"{error_message} RTT: N/A"
 
 def generate_ssml_tts_clip(ssml, voice_uuid, project_uuid, language_code="en-US"):
     if not all([ssml, voice_uuid, project_uuid]):
         return None, "Missing SSML, voice UUID, or project UUID."
     print(f"Generating SSML TTS for voice: {voice_uuid} in language: {language_code}")
     print("Note: For SSML, please ensure your SSML body includes the <lang xml:lang='your-code'> tag for language specification.")
+    start_time = time.time()
     try:
         response = Resemble.v2.clips.create_sync(
             project_uuid=project_uuid,
@@ -205,17 +244,19 @@ def generate_ssml_tts_clip(ssml, voice_uuid, project_uuid, language_code="en-US"
         clip_src = response['item']['audio_src']
         output_filename = "ssml_tts_output.wav"
         downloaded_path = download_audio_from_url(clip_src, output_filename)
+        end_time = time.time()
+        rtt = round((end_time - start_time) * 1000, 2)
         if downloaded_path:
             print("SSML TTS clip generated and saved successfully.")
-            return downloaded_path, "SSML TTS clip generated successfully."
+            return downloaded_path, f"SSML TTS clip generated successfully. RTT: {rtt} ms"
         else:
             return None, "Failed to download SSML TTS clip."
     except Exception as e:
         error_message = f"Error generating SSML TTS clip: {e}"
         print(error_message)
-        return None, error_message
+        return None, f"{error_message} RTT: N/A"
 
-def generate_streaming_tts(text, voice_uuid, project_uuid, language_code="en-US"):
+def generate_streaming_tts(text, voice_uuid, project_uuid, language_code="en-US", auto_translate=True):
     if not all([text, voice_uuid, project_uuid]):
         return None, "Missing streaming input"
     print(f"Streaming TTS: Streaming Text-to-Speech (HTTP POST, real-time audio), voice {voice_uuid}, language {language_code}")
@@ -224,8 +265,13 @@ def generate_streaming_tts(text, voice_uuid, project_uuid, language_code="en-US"
         "Authorization": f"Bearer {RESEMBLE_API_KEY}",
         "Content-Type": "application/json"
     }
+    # Optionally translate
+    text_to_use = text
+    translate_note = ""
+    if auto_translate:
+        text_to_use, translate_note = maybe_translate_text(text, language_code)
     # Wrap the text in an SSML <lang> tag
-    ssml_data = f'<speak><lang xml:lang="{language_code}">{text}</lang></speak>'
+    ssml_data = f'<speak><lang xml:lang="{language_code}">{text_to_use}</lang></speak>'
     payload = {
         "project_uuid": project_uuid,
         "voice_uuid": voice_uuid,
@@ -233,24 +279,31 @@ def generate_streaming_tts(text, voice_uuid, project_uuid, language_code="en-US"
         "precision": "PCM_16", # Optional, setting a default
         "sample_rate": 44100, # Optional, setting a default
     }
+    start_time = time.time()
+    first_chunk_time = None
     try:
         # Stream response as WAV
         r = requests.post(url, headers=headers, json=payload, stream=True)
         if not r.ok:
             error_details = r.text # Capture full error response
             print("Stream error:", error_details)
-            return None, f"Streaming error: {error_details}"
+            return None, f"Streaming error: {error_details} RTT: N/A"
         wav_path = "tts_streamed_output.wav"
         with open(wav_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 if chunk:
+                    if first_chunk_time is None:
+                        first_chunk_time = time.time()
                     f.write(chunk)
+        end_time = time.time()
+        total_rtt = round((end_time - start_time) * 1000, 2)
+        first_byte_latency = round((first_chunk_time - start_time) * 1000, 2) if first_chunk_time else "N/A"
         print("Streaming TTS completed.")
-        return wav_path, "Streaming TTS completed."
+        return wav_path, f"Streaming TTS completed. Total RTT: {total_rtt} ms, First Byte Latency: {first_byte_latency} ms{translate_note}"
     except Exception as e:
-        return None, f"Streaming error: {e}"
+        return None, f"Streaming error: {e} RTT: N/A"
 
-def generate_streaming_tts_websocket(text, voice_uuid, project_uuid, language_code="en-US"):
+def generate_streaming_tts_websocket(text, voice_uuid, project_uuid, language_code="en-US", auto_translate=True):
     if not all([text, voice_uuid, project_uuid]):
         return None, "Missing streaming input (WebSocket)"
 
@@ -258,13 +311,20 @@ def generate_streaming_tts_websocket(text, voice_uuid, project_uuid, language_co
     websocket_url = "wss://websocket.cluster.resemble.ai/stream"
     output_filename = "tts_streamed_websocket_output.wav"
 
+    start_time = time.time()
+    first_chunk_time = None
     try:
         ws = websocket.create_connection(websocket_url,
                                          header={'Authorization': f'Bearer {RESEMBLE_API_KEY}'})
 
         # Send synthesis request
+        # Optionally translate
+        text_to_use = text
+        translate_note = ""
+        if auto_translate:
+            text_to_use, translate_note = maybe_translate_text(text, language_code)
         # Wrap the text in an SSML <lang> tag
-        ssml_data = f'<speak><lang xml:lang="{language_code}">{text}</lang></speak>'
+        ssml_data = f'<speak><lang xml:lang="{language_code}">{text_to_use}</lang></speak>'
         payload = {
             "voice_uuid": voice_uuid,
             "project_uuid": project_uuid,
@@ -292,25 +352,31 @@ def generate_streaming_tts_websocket(text, voice_uuid, project_uuid, language_co
                             error_message += ". Please ensure you have a Resemble AI Business Plan or higher."
                         print(f"WebSocket error: {error_message}")
                         ws.close()
-                        return None, f"Streaming (WebSocket) error: {error_message}"
+                        return None, f"Streaming (WebSocket) error: {error_message} RTT: N/A"
                 elif isinstance(message, bytes):
                     # Binary audio data
+                    if first_chunk_time is None:
+                        first_chunk_time = time.time()
                     f.write(message)
 
         ws.close()
+        end_time = time.time()
+        total_rtt = round((end_time - start_time) * 1000, 2)
+        first_byte_latency = round((first_chunk_time - start_time) * 1000, 2) if first_chunk_time else "N/A"
         print("Streaming TTS (WebSocket) completed.")
-        return output_filename, "Streaming TTS (WebSocket) completed."
+        return output_filename, f"Streaming TTS (WebSocket) completed. Total RTT: {total_rtt} ms, First Byte Latency: {first_byte_latency} ms{translate_note}"
 
     except websocket.WebSocketConnectionClosedException:
-        return None, "WebSocket connection closed unexpectedly. Ensure you have a Business Plan or higher."
+        return None, "WebSocket connection closed unexpectedly. Ensure you have a Business Plan or higher. RTT: N/A"
     except Exception as e:
-        return None, f"Streaming (WebSocket) error: {e}"
+        return None, f"Streaming (WebSocket) error: {e} RTT: N/A"
 
 def generate_sts_batch_clip(source_audio_path, voice_uuid, project_uuid, sts_model_code, language_code="en-US"):
     if not all([source_audio_path, voice_uuid, project_uuid]):
         return None, "Missing source audio, voice UUID, or project UUID."
     print(f"[STS BATCH] Batch STS with model {sts_model_code} and language {language_code}...")
     temp_path = None # Initialize temp_path for cleanup
+    start_time = time.time()
     try:
         with open(source_audio_path, "rb") as f:
             audio_bytes = f.read()
@@ -361,13 +427,15 @@ def generate_sts_batch_clip(source_audio_path, voice_uuid, project_uuid, sts_mod
         with open(output_filename, "wb") as f:
             f.write(decoded_audio_bytes)
 
+        end_time = time.time()
+        rtt = round((end_time - start_time) * 1000, 2)
         print("Batch STS clip generated successfully.")
-        return output_filename, "Speech-to-Speech clip generated!"
+        return output_filename, f"Speech-to-Speech clip generated! RTT: {rtt} ms"
 
     except Exception as e:
         error_message = f"Error generating batch STS clip: {e}"
         print(error_message)
-        return None, error_message
+        return None, f"{error_message} RTT: N/A"
     finally:
         # Cleanup temporary file if it was created
         if temp_path and os.path.exists(temp_path):
@@ -422,10 +490,33 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Resemble AI Test Suite") as demo:
             ("Mandarin (China)", "zh-CN"),
             ("Dutch (Netherlands)", "nl-NL"),
             ("Hindi (India)", "hi-IN"),
+            # Indian languages requested
+            ("Assamese", "as-IN"),
+            ("Bengali", "bn-IN"),
+            ("Bodo", "brx-IN"),
+            ("Dogri", "doi-IN"),
+            ("Gujarati", "gu-IN"),
+            ("Kashmiri", "ks-IN"),
+            ("Kannada", "kn-IN"),
+            ("Konkani", "kok-IN"),
+            ("Maithili", "mai-IN"),
+            ("Malayalam", "ml-IN"),
+            ("Manipuri (Meitei)", "mni-IN"),
+            ("Marathi", "mr-IN"),
+            ("Nepali", "ne-IN"),
+            ("Odia (Oriya)", "or-IN"),
+            ("Punjabi", "pa-IN"),
+            ("Sanskrit", "sa-IN"),
+            ("Santali", "sat-IN"),
+            ("Sindhi", "sd-IN"),
+            ("Tamil", "ta-IN"),
+            ("Telugu", "te-IN"),
+            ("Urdu", "ur-IN"),
         ],
         value="en-US", # Default language
         interactive=True
     )
+    auto_translate_checkbox = gr.Checkbox(value=True, label="Auto-translate input text to selected language")
     fetch_projects_btn.click(
         fn=get_all_projects,
         outputs=[project_dropdown, all_projects_data_state]
@@ -455,8 +546,8 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Resemble AI Test Suite") as demo:
             tts_audio_output = gr.Audio(label="Generated Audio")
             tts_status_output = gr.Textbox(label="Status", interactive=False)
             tts_button.click(
-                fn=lambda text, vuuid, puuid, lang_code: generate_tts_clip(text, vuuid, puuid, lang_code),
-                inputs=[tts_input, voice_uuid_output, project_uuid_output, language_dropdown],
+                fn=lambda text, vuuid, puuid, lang_code, do_tr: generate_tts_clip(text, vuuid, puuid, lang_code, do_tr),
+                inputs=[tts_input, voice_uuid_output, project_uuid_output, language_dropdown, auto_translate_checkbox],
                 outputs=[tts_audio_output, tts_status_output]
             )
 
@@ -492,8 +583,8 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Resemble AI Test Suite") as demo:
             stream_audio_output = gr.Audio(label="Generated Streaming Audio")
             stream_status_output = gr.Textbox(label="Status", interactive=False)
             stream_button.click(
-                fn=lambda text, vuuid, puuid, lang_code: generate_streaming_tts(text, vuuid, puuid, lang_code),
-                inputs=[stream_input, voice_uuid_output, project_uuid_output, language_dropdown],
+                fn=lambda text, vuuid, puuid, lang_code, do_tr: generate_streaming_tts(text, vuuid, puuid, lang_code, do_tr),
+                inputs=[stream_input, voice_uuid_output, project_uuid_output, language_dropdown, auto_translate_checkbox],
                 outputs=[stream_audio_output, stream_status_output]
             )
 
@@ -511,8 +602,8 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Resemble AI Test Suite") as demo:
             websocket_stream_audio_output = gr.Audio(label="Generated Streaming Audio (WebSocket)")
             websocket_stream_status_output = gr.Textbox(label="Status (WebSocket)", interactive=False)
             websocket_stream_button.click(
-                fn=lambda text, vuuid, puuid, lang_code: generate_streaming_tts_websocket(text, vuuid, puuid, lang_code),
-                inputs=[websocket_stream_input, voice_uuid_output, project_uuid_output, language_dropdown],
+                fn=lambda text, vuuid, puuid, lang_code, do_tr: generate_streaming_tts_websocket(text, vuuid, puuid, lang_code, do_tr),
+                inputs=[websocket_stream_input, voice_uuid_output, project_uuid_output, language_dropdown, auto_translate_checkbox],
                 outputs=[websocket_stream_audio_output, websocket_stream_status_output]
             )
 
