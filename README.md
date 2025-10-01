@@ -1,134 +1,139 @@
-# Resemble AI Feature Tester
+# Resemble AI Feature Tester - Metrics and Settings
 
-This project provides a Gradio-based interface to test various features of the Resemble AI API, including Text-to-Speech (TTS), SSML TTS, Streaming TTS (HTTP and WebSocket), Speech-to-Speech (STS), Voice Cloning, and Audio Enhancement. It incorporates multilingual support using SSML `<lang>` tags and saves generated audio outputs to local files.
+This document outlines the key metrics and settings observed and calculated from the Resemble AI Feature Tester application.
 
-## Table of Contents
+## 1. Application Overview
+The application (`app.py`) provides a Gradio interface to test various Resemble AI functionalities including:
+- Text-to-Speech (TTS)
+- SSML Text-to-Speech
+- Streaming TTS (HTTP)
+- Streaming TTS (WebSocket)
+- Speech-to-Speech (STS)
+- Voice Cloning
+- Audio Enhancement
 
-- [Project Overview](#project-overview)
-- [Setup](#setup)
-- [Features](#features)
-  - [Text-to-Speech (TTS)](#text-to-speech-tts)
-  - [SSML Text-to-Speech (SSML TTS)](#ssml-text-to-speech-ssml-tts)
-  - [Streaming Text-to-Speech (HTTP)](#streaming-text-to-speech-http)
-  - [Streaming Text-to-Speech (Websocket)](#streaming-text-to-speech-websocket)
-  - [Speech-to-Speech (Long Audio)](#speech-to-speech-long-audio)
-  - [Clone Voices](#clone-voices)
-  - [Audio Enhancement](#audio-enhancement)
-- [Multilingual Support](#multilingual-support)
-- [Output File Saving](#output-file-saving)
-- [Running the Application](#running-the-application)
+## 2. Key Settings and Configuration
 
-## Project Overview
+### API Key
+- **`RESEMBLE_API_KEY`**: Loaded from a `.env` file for secure API access. This is essential for all API interactions.
 
-The `app.py` script sets up a Gradio application that allows users to interact with the Resemble AI API. It handles authentication, project and voice selection, and demonstrates various synthesis and voice manipulation capabilities provided by Resemble AI.
+### Project and Voice Selection
+- **Selected Project UUID (Example)**: `682842c1`
+- **Selected Voice UUID (Example)**: `abbbc383`
+- **Supported Languages**:
+    - English (US): `en-US`
+    - Spanish (Spain): `es-ES`
+    - French (France): `fr-FR`
+    - German (Germany): `de-DE`
+    - Italian (Italy): `it-IT`
+    - Japanese (Japan): `ja-JP`
+    - Korean (Korea): `ko-KR`
+    - Mandarin (China): `zh-CN`
+    - Dutch (Netherlands): `nl-NL`
+    - Hindi (India): `hi-IN`
+    - Assamese: `as-IN`
+    - Bengali: `bn-IN`
+    - Bodo: `brx-IN`
+    - Dogri: `doi-IN`
+    - Gujarati: `gu-IN`
+    - Kashmiri: `ks-IN`
+    - Kannada: `kn-IN`
+    - Konkani: `kok-IN`
+    - Maithili: `mai-IN`
+    - Malayalam: `ml-IN`
+    - Manipuri (or Meitei): `mni-IN`
+    - Marathi: `mr-IN`
+    - Nepali: `ne-IN`
+    - Odia (formerly Oriya): `or-IN`
+    - Punjabi: `pa-IN`
+    - Sanskrit: `sa-IN`
+    - Santali: `sat-IN`
+    - Sindhi: `sd-IN`
+    - Tamil: `ta-IN`
+    - Telugu: `te-IN`
+    - Urdu: `ur-IN`
 
-## Setup
+### Model Versions
+- **Text-to-Speech (TTS) Models**:
+    - Resemble Legacy TTS (`tts-legacy`)
+    - Resemble Enhanced TTS V1 (`tts-v1`)
+    - Resemble Enhanced TTS V2 (`tts-v2`)
+    - Resemble Enhanced TTS V3 (`tts-v3`)
+- **Speech-to-Speech (STS) Models**:
+    - Resemble Legacy STS (`sts-legacy`)
+    - Resemble Core STS V1 (`sts-v1`)
+    - Resemble Core STS V2 (`sts-v2`)
 
-1.  **Clone the repository (if applicable) or ensure you have `app.py`, `requirements.txt` and a `.env` file in your project directory.**
+### Audio Enhancement Parameters
+- **`enhancement_level`**: Range 0.0-1.0 (Default: 1.0)
+- **`loudness_target_level`**: Range -70 to -5 (Default: -14)
+- **`loudness_peak_limit`**: Range -9 to 0 (Default: -1)
 
-2.  **Install dependencies:**
-    It's recommended to use a virtual environment.
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Streaming TTS Parameters
+- **`precision`**: `PCM_16`
+- **`sample_rate`**: `44100`
 
-3.  **Set up your Resemble AI API Key:**
-    Create a `.env` file in the root directory of the project (the same directory as `app.py`) and add your Resemble AI API key:
-    ```
-    RESEMBLE_API_KEY=``
-    ```
-    Replace `Resemble AI API Key` with your actual Resemble AI API key.
+## 3. Performance Metrics (Round Trip Time - RTT)
 
-## Features
+RTT measures the time taken for a request to be sent to the Resemble AI API and for the complete response (audio clip) to be received.
 
-The Gradio interface is organized into several tabs, each demonstrating a specific Resemble AI feature.
+### Text-to-Speech (Plain Text)
+- **Calculation**: Time from API call initiation to audio download completion.
+- **Example RTT (from screenshot)**: Not explicitly shown in the provided TTS clip, but the format is `TTS clip generated successfully. RTT: XXXX.XX ms`.
 
-### 1. Connect & Select Project/Voice
+### SSML Text-to-Speech
+- **Calculation**: Time from API call initiation to audio download completion.
+- **Example RTT (from screenshot)**: `18145.86 ms`
 
-Upon launching the application, you'll need to:
-1.  Click "1. Connect & Fetch Projects" to populate the project dropdown.
-2.  Select a project from "2. Select a Project".
-3.  Select a voice from "3. Select a Voice".
+### Streaming TTS (HTTP POST)
+- **Calculation**:
+    - **Total RTT**: Time from API call initiation to complete audio stream reception.
+    - **First Byte Latency**: Time from API call initiation to the reception of the first audio chunk.
+- **Example Total RTT (from screenshot)**: `17501.26 ms`
+- **Example First Byte Latency (from screenshot)**: `1092.38 ms`
 
-The UUIDs for the selected project and voice will be displayed. A "Select Language (for SSML <lang> tag)" dropdown is also available to choose the desired language for synthesis.
+### Streaming TTS (WebSocket)
+- **Calculation**:
+    - **Total RTT**: Time from WebSocket connection initiation to complete audio stream reception.
+    - **First Byte Latency**: Time from WebSocket connection initiation to the reception of the first audio chunk.
+- **Note**: This feature requires a Resemble AI Business Plan or higher.
 
-### Text-to-Speech (TTS)
+### Speech-to-Speech (Batch)
+- **Calculation**: Time from API call initiation (including audio upload) to decoded audio reception it has a limit of 2000 words.
+- **Example RTT (from app.py logic)**: RTT is calculated and displayed in the format `Speech-to-Speech clip generated! RTT: unknown`.
 
-This tab allows you to convert plain text into speech using a selected voice and model.
+### Clone Voice (Batch)
+- **Calculation**: Time from Cloned Voice.
+- **Example RTT (from app.py logic)**: Time from WebSocket connection initiation to the reception of the first audio chunk.
+- **Note**: Time from WebSocket connection initiation to the reception of the first audio chunk. This feature requires a Resemble AI Business Plan or higher.
 
--   **Input:** Text to Synthesize, TTS Model Version, Selected Voice, Selected Project, Selected Language.
--   **Output:** Generated audio clip (`tts_output.wav`) and status messages.
--   **Multilingual Support:** The input text is automatically wrapped in an SSML `<lang>` tag based on the selected language from the "Select Language" dropdown. **Note:** The voice you choose must support the selected language for proper synthesis.
+### Audio Enchancement (Batch)
+- **Calculation**: Time from API call initiation (including audio upload) to decoded audio reception.
+- **Example RTT (from app.py logic)**: RTT is calculated and displayed in the format `Audio Enchancement clip generated! RTT: 10345.87 ms`.
 
-### SSML Text-to-Speech (SSML TTS)
+## 4. Cost Considerations
 
-This tab supports synthesizing speech from SSML (Speech Synthesis Markup Language), allowing for fine-grained control over pitch, emphasis, prosody, and more.
+The application itself does not calculate direct costs. However, usage of the Resemble AI API typically incurs costs based on:
+- **Character Count**: For TTS and SSML TTS, the number of characters processed.
+- **Audio Duration**: For STS, Streaming TTS, and possibly enhancement, the duration of generated or processed audio.
+- **API Calls**: The number of requests made to the Resemble AI API.
+- **Plan Type**: Different Resemble AI subscription plans (e.g., Business Plan) offer varying features and pricing structures, especially for advanced features like WebSocket streaming.
 
--   **Input:** SSML markup, TTS Model Version, Selected Voice, Selected Project, Selected Language.
--   **Output:** Generated SSML audio clip (`ssml_tts_output.wav`) and status messages.
--   **Multilingual Support:** The `language_code` is passed to the function, but for SSML input, it is the user's responsibility to include the `<lang xml:lang="your-code">` tag directly within their SSML body for language specification.
+For detailed pricing information, please refer to the official Resemble AI pricing page.
 
-### Streaming Text-to-Speech (HTTP)
+## 5. Auto-Translation to Selected Language
 
-This feature demonstrates real-time audio streaming of TTS output via an HTTP POST request.
+When you enter text in any language and choose a target language (e.g., select `Marathi (mr-IN)` while the text is in English), the app can automatically translate the text to the selected language before synthesis.
 
--   **Input:** Text to Synthesize (streamed), TTS Model Version, Selected Voice, Selected Project, Selected Language.
--   **Output:** Streamed audio saved to `tts_streamed_output.wav` and status messages.
--   **Multilingual Support:** The input text is automatically wrapped in an SSML `<lang>` tag based on the selected language from the "Select Language" dropdown. **Note:** The voice you choose must support the selected language for proper synthesis.
+### How it works
+- A checkbox "Auto-translate input text to selected language" is available near the language selector.
+- When enabled, the input text is translated to the selected language's primary locale before TTS synthesis and streaming.
+- This applies to:
+    - Text-to-Speech
+    - Streaming TTS (HTTP)
+    - Streaming TTS (WebSocket)
+- SSML mode is unchanged; SSML you paste is sent as-is.
 
-### Streaming Text-to-Speech (Websocket)
-
-This tab provides real-time audio streaming of TTS output via a WebSocket connection. This feature is typically available for Resemble AI Business plan users or higher.
-
--   **Input:** Text to Synthesize (streamed via WebSocket), TTS Model Version, Selected Voice, Selected Project, Selected Language.
--   **Output:** Streamed audio saved to `tts_streamed_websocket_output.wav` and status messages.
--   **Multilingual Support:** The input text is automatically wrapped in an SSML `<lang>` tag based on the selected language from the "Select Language" dropdown. **Note:** The voice you choose must support the selected language for proper synthesis.
-
-### Speech-to-Speech (Long Audio)
-
-This tab allows for batch Speech-to-Speech conversion, supporting longer audio inputs.
-
--   **Input:** Source audio file, STS Model Version, Selected Voice, Selected Project, Selected Language.
--   **Output:** Converted audio file (`resemble_sts_output.wav`) and status messages.
--   **Multilingual Support:** The base64 encoded audio data is wrapped in an SSML `<lang>` tag with the selected language code. **Note:** The voice you choose must support the selected language for proper synthesis.
-
-### Clone Voices
-
-This feature allows you to create new voices by uploading an audio sample.
-
--   **Input:** New Voice Name, Clean Audio Sample, Selected Project, Selected Language (informative).
--   **Output:** Cloning status.
--   **Multilingual Support:** The `language_code` is passed to the `clone_voice` function but is primarily informative. The actual language capabilities of the cloned voice depend on the language(s) present in the uploaded training audio.
-
-### Audio Enhancement
-
-This tab provides functionality to enhance an uploaded audio recording using the Resemble AI audio enhancement API.
-
--   **Input:** Audio file to enhance.
--   **Output:** Enhanced audio file (URL returned by API) and status messages.
-
-## Multilingual Support
-
-Multilingual support in this application is implemented by leveraging Resemble AI's SSML capabilities. The selected language from the Gradio dropdown is used to construct an `<lang xml:lang="your-language-code">` tag that wraps the input text/data sent to the Resemble AI API.
-
-**Crucially, the ability of a voice to speak in a specific language depends on whether that voice has been trained for that language.** If a voice is not trained for a particular language, even with the `<lang>` tag, it may default to its primary trained language or produce inaccurate speech. For comprehensive multilingual support with a single voice, consider using Resemble AI's "Resemble Localize" feature to adapt your voices for multiple languages.
-
-## Output File Saving
-
-All generated audio outputs from the TTS, SSML TTS, and Streaming TTS functions are saved to local `.wav` files in the project directory:
-
--   **Text-to-Speech:** `tts_output.wav`
--   **SSML Text-to-Speech:** `ssml_tts_output.wav`
--   **Streaming Text-to-Speech (HTTP):** `tts_streamed_output.wav`
--   **Streaming Text-to-Speech (Websocket):** `tts_streamed_websocket_output.wav`
--   **Speech-to-Speech (Long Audio):** `resemble_sts_output.wav`
-
-## Running the Application
-
-To start the Gradio interface, run the `app.py` script:
-
-```bash
-python app.py
-```
-
-The application will launch in your web browser, typically at `http://127.0.0.1:7860` (or another port if 7860 is in use).
+### Notes
+- Translation uses `googletrans` if available. If it is not installed or fails, the app falls back to the original text.
+- The synthesized voice remains the selected Resemble voice; only the text content is translated.
